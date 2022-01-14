@@ -84,7 +84,7 @@ def main():
     else:
         pool = multiprocessing.Pool(12)
         results=[]
-        for episode in range(0,episodes):
+        for episode in range(episodes):
             print('Episode',episode)
             results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,),error_callback=log_e))
             current_process = psutil.Process()

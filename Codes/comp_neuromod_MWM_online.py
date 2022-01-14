@@ -112,20 +112,14 @@ def main():
         from IPython import display
         plt.close()
     if episodes==1:
-        if randomloc:
-            initial_pos = list(i_pos[0,:])
-        else:
-            initial_pos = [0,0]
+        initial_pos = list(i_pos[0,:]) if randomloc else [0,0]
         episode_run(jobID,1,plot_flag,Trials,changepos,Sero,eta,A_DA,A_Sero,Activ,Inhib,R_D,T_R,tau_DA,tau_Sero,initial_pos,tau_e_sero,)
     else:
         pool = multiprocessing.Pool(12)
         results=[]
-        for episode in range(0,episodes):
+        for episode in range(episodes):
             print('Episode',episode)
-            if randomloc:
-                initial_pos = list(i_pos[episode,:])
-            else:
-                initial_pos = [0,0]
+            initial_pos = list(i_pos[episode,:]) if randomloc else [0,0]
             results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta,A_DA,A_Sero,Activ,Inhib,R_D,T_R,tau_DA,tau_Sero,initial_pos,tau_e_sero,),error_callback=log_e))
             current_process = psutil.Process()
             children = current_process.children(recursive=True)
