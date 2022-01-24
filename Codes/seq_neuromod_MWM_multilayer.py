@@ -76,7 +76,7 @@ def main():
 
         episode_run(jobID,1,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
     else:
-        pool = multiprocessing.Pool(4)
+        pool = multiprocessing.Pool(1)
         results=[]
         for episode in range(0,episodes):
             print('Episode',episode)
@@ -345,10 +345,8 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             
             # CA1 cells
             epsp_ca1, epsp_decay_ca1, epsp_rise_ca1 = convolution(epsp_decay_ca1, epsp_rise_ca1, tau_m, tau_s, eps0, X, np.multiply(w_ca1,w_walls_ca1)) #EPSP in the model * weights
-
             X_ca1, last_spike_ca1, Canc_ca1, _ = neuron_ca1(epsp_ca1, chi, last_spike_ca1, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc) #sums EPSP, calculates potential and spikes
             ca1_spikes.append(X_ca1)
-
 
             # store_pos[i-1,:] = pos #store position (for plotting)
 
