@@ -28,11 +28,13 @@ def main():
     parser.add_option("-c", "--changeposition", dest="changepos",
           help="Change the postion of reward", default=False, action='store_true')
     parser.add_option("-t", "--trials", dest="trials",
-      help="Number of trials", metavar="int",default=40)
+      help="Number of trials", metavar="int",default=1)
     parser.add_option("-s", "--serotonin", dest="serotonin",
       help="Activate serotonergic system", default=False, action='store_true')
     parser.add_option("-p", "--plot", dest="plot",
       help="Plotting", default=False, action='store_true')
+    parser.add_option("-q", "--ca3", dest="ca3_scale",
+      help="Does CA1 receive CA3 input?", default=1.0)    
     parser.add_option("-d", "--dlr", dest="eta_DA",
                   help="Learning rate for dopamine", metavar="float", default=0.01)
     parser.add_option("-l", "--slr", dest="eta_Sero",
@@ -69,6 +71,7 @@ def main():
     #Time constants for STDP window
     tau_DA=options.TDA #time constant pre-post window
     tau_Sero=options.TSero   #time constant post-pre window for serotonin
+    ca3_scale = options.ca3_scale 
 
     if plot_flag:
         plt.close()
@@ -80,7 +83,7 @@ def main():
     for episode in range(0,episodes):
         print('Episode',episode)
         # results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,),error_callback=log_e))
-        results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,))
+        results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale))
         # ca1_spikes = episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
         # return ca1_spikes
         current_process = psutil.Process()
@@ -100,8 +103,8 @@ def main():
 def log_e(e):
   print(e)
 
-def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,):
-    #Seed random number of each pool
+def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale):
+    # random number of each pool
     np.random.seed()
 
     #Results to be exported for each episode
@@ -291,6 +294,10 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     ranges = [(T_max*Trials/6,2*T_max*Trials/6), (3*T_max*Trials/6,4*T_max*Trials/6), (5*T_max*Trials/6,T_max*Trials)]
     ## start simulation
     w_tot_old = w_tot[0:N_action,0:N_pc] #store weights before start
+    ca3_activities = []
+    ca1_activities = []
+    ac_activities = []
+    old_tr = tr
     while i<T_max*Trials:
         i+=int(1)
         t=np.mod(i,T_max)
@@ -323,12 +330,8 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             trace_post_pre= np.zeros([N_action,N_pc])
             trace_tot = np.zeros([N_action,N_pc])
             eligibility_trace = np.zeros([N_action, N_pc])
-            ca3_activities = []
-            ca1_activities = []
-            ac_activities = []
-            activities['ca3'].append(ca3_activities)
-            activities['ca1'].append(ca1_activities)
-            activities['ac'].append(ac_activities)
+
+
 
             #change reward location in the second half of the experiment
             if (tr==(Trials/2)+1) and changepos:
@@ -343,6 +346,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         ## place cells (CA3 layer)
         rhos = np.multiply(rho_pc,np.exp(-np.sum((np.matlib.repmat(pos,n_x*n_y,1)-pc)**2,axis=1)/(sigma_pc**2))) #rate inhomogeneous poisson process
         prob = rhos
+        ca3_activities.append(rhos)
         #turn place cells off after reward is reached
         if t>t_rew:
             prob=np.zeros_like(rhos)
@@ -353,8 +357,11 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         
         # CA1 cells
         epsp_ca1, epsp_decay_ca1, epsp_rise_ca1 = convolution(epsp_decay_ca1, epsp_rise_ca1, tau_m, tau_s, eps0, X, np.multiply(w_ca1,w_walls_ca1)) #EPSP in the model * weights
-
-        X_ca1, last_spike_ca1, Canc_ca1, _ = neuron_ca1(epsp_ca1, chi, last_spike_ca1, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc) #sums EPSP, calculates potential and spikes
+        
+        X_ca1, last_spike_ca1, Canc_ca1, u_ca1 = neuron_ca1(epsp_ca1, chi, last_spike_ca1, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc, ca3_scale) #sums EPSP, calculates potential and spikes
+        ca1_activities.append(u_ca1)
+        
+        
         ca1_spikes.append(X_ca1)
 
 
@@ -402,7 +409,9 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         epsp_decay=np.multiply(epsp_decay,Canc.T)
         # neuron model
         epsp_tot, epsp_decay, epsp_rise = convolution(epsp_decay, epsp_rise, tau_m, tau_s, eps0, X_cut, np.multiply(w_tot,w_walls)) #EPSP in the model * weights
-        Y_action_neurons,last_spike_post, Canc, _ = neuron(epsp_tot, chi, last_spike_post, tau_m, rho0, theta, delta_u, i) #sums EPSP, calculates potential and spikes
+        Y_action_neurons,last_spike_post, Canc, u_ac = neuron(epsp_tot, chi, last_spike_post, tau_m, rho0, theta, delta_u, i) #sums EPSP, calculates potential and spikes
+        ac_activities.append(u_ac)
+        
         
         # smooth firing rate of the action neurons
         rho_action_neurons, rho_decay, rho_rise = convolution (rho_decay, rho_rise, tau_gamma, v_gamma, 1, Y_action_neurons)
@@ -514,6 +523,14 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
                 f4.remove()
                 pos2.remove()
                 t_end = T_max;
+        if old_tr != tr:
+            activities['ca1'].append(ca1_activities)
+            activities['ca3'].append(ca3_activities)
+            activities['ac'].append(ac_activities)
+        old_tr = tr
+    activities['ca1'].append(ca1_activities)
+    activities['ca3'].append(ca3_activities)
+    activities['ac'].append(ac_activities)
 
     x_pos=store_pos[np.where(store_pos.any(axis=1))[0],0]
     y_pos=store_pos[np.where(store_pos.any(axis=1))[0],1]

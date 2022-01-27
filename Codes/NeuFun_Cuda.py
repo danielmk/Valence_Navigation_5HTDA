@@ -66,13 +66,13 @@ def neuron(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i):
     return Y, last_spike_post, Canc,u
 
 
-def neuron_ca1(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc):
+def neuron_ca1(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc, epsp_scaling):
     """CA1 neurons receive EPSPs from CA3 neurons but have their membrane potential also 
     modulated by place"""
     N_pre, N_post = epsp.shape #no. place cells, no. action neurons
-    u = np.sum(epsp,axis=0,keepdims=True).T+chi*np.exp((-i+last_spike_post)/tau_m) #membrane potential
+    u_epsp = np.sum(epsp,axis=0,keepdims=True).T+chi*np.exp((-i+last_spike_post)/tau_m) #membrane potential
     # print(u.mean())
-    u = rho0 * np.exp(-(np.sum((np.matlib.repmat(pos,n_x*n_y,1)-pc)**2,axis=1)/(sigma_pc**2)) + 0 * (u.T - 15)).T #rate inhomogeneous poisson process
+    u = rho0 * np.exp(-(np.sum((np.matlib.repmat(pos,n_x*n_y,1)-pc)**2,axis=1)/(sigma_pc**2)) + epsp_scaling * (u_epsp.T)).T #rate inhomogeneous poisson process
     Y= np.random.rand(N_post,1) <=u #realization spike train
     # pdb.set_trace()
     last_spike_post[Y]=i #update time postsyn spike
