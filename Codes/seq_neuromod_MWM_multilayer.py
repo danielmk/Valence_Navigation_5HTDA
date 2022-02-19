@@ -22,19 +22,19 @@ import sys
 def main():
     parser = OptionParser()
     parser.add_option("-o", "--output", dest="jobID",
-                  help="ID of the JOB", metavar="FILE", default="dummy_job")
+                  help="ID of the JOB", metavar="FILE", default="multilayer_test_off")
     parser.add_option("-e", "--episodes", dest="episodes",
-          help="Runs to be performed", metavar="int", default=1)
+          help="Runs to be performed", metavar="int", default=20)
     parser.add_option("-c", "--changeposition", dest="changepos",
           help="Change the postion of reward", default=False, action='store_true')
     parser.add_option("-t", "--trials", dest="trials",
-      help="Number of trials", metavar="int",default=1)
+      help="Number of trials", metavar="int",default=40)
     parser.add_option("-s", "--serotonin", dest="serotonin",
-      help="Activate serotonergic system", default=False, action='store_true')
+      help="Activate serotonergic system", default=True, action='store_true')
     parser.add_option("-p", "--plot", dest="plot",
       help="Plotting", default=False, action='store_true')
     parser.add_option("-q", "--ca3", dest="ca3_scale",
-      help="Does CA1 receive CA3 input?", default=1.0)    
+      help="To what extent does CA1 receive CA3 input?", default=0.0)
     parser.add_option("-d", "--dlr", dest="eta_DA",
                   help="Learning rate for dopamine", metavar="float", default=0.01)
     parser.add_option("-l", "--slr", dest="eta_Sero",
@@ -51,6 +51,7 @@ def main():
                   help="Time constant for the STDP window of serotonin", metavar="float", default=10)
     parser.add_option("-j", "--jtime", dest="TDA",
                   help="Time constant for the STDP window of dopamine", metavar="float", default=10)
+    
     
     options, args = parser.parse_args()
     jobID = options.jobID
@@ -204,7 +205,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     w_max=3 #upper bound feed-forward proto-weights and weights
     w_min=1 #.pwer bound feed-forward weights
     w_in = np.ones([N_pc, N_action]).T*2 #initialization feed-forward weights
-    w_in_ca1 = np.ones([N_pc, N_pc]).T*2
+    w_in_ca1 = np.random.rand(N_pc, N_pc).T
 
     W1 = np.zeros([N_action, N_pc]) #initialize unscale trace
     trace_tot = np.zeros([N_action,N_pc]) #sum of the traces
@@ -352,12 +353,10 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         # CA1 cells
         epsp_ca1, epsp_decay_ca1, epsp_rise_ca1 = convolution(epsp_decay_ca1, epsp_rise_ca1, tau_m, tau_s, eps0, X, np.multiply(w_ca1,w_walls_ca1)) #EPSP in the model * weights
         
-        X_ca1, last_spike_ca1, Canc_ca1, u_ca1 = neuron_ca1(epsp_ca1, chi, last_spike_ca1, tau_m, rho0, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc, ca3_scale) #sums EPSP, calculates potential and spikes
+        X_ca1, last_spike_ca1, Canc_ca1, u_ca1 = neuron_ca1(epsp_ca1, chi, last_spike_ca1, tau_m, rho_pc, theta, delta_u, i, pos, n_x, n_y, pc, sigma_pc, ca3_scale) #sums EPSP, calculates potential and spikes
         ca1_activities.append(u_ca1)
-        
-        
-        ca1_spikes.append(X_ca1)
 
+        ca1_spikes.append(X_ca1)
 
         # store_pos[i-1,:] = pos #store position (for plotting)
 
