@@ -87,3 +87,10 @@ def weights_update_rate(A, tau_STDP, r_X, r_Y, W, trace, tau_e):
     #Elegibility trace
     tot_conv, trace = convolution_type2(trace, tau_e,  1, W) #All weight changes filtered through trace
     return W, tot_conv, trace, W
+
+def bcm(w, theta, xi, y, epsilon=1):
+    xi=np.repeat(xi[:,None], y.shape[0], axis=1)
+    y=np.repeat(y, xi.shape[0], axis=1).T
+    return y * (y - theta) * xi - epsilon * w
+
+

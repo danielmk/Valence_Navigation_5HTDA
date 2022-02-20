@@ -10,7 +10,7 @@ import itertools
 import time
 import pandas as pd
 from IPython import display
-from NeuFun_Cuda import convolution, convolution_type2, neuron, neuron_ca1, weights_update_rate
+from NeuFun_Cuda import convolution, convolution_type2, neuron, neuron_ca1, weights_update_rate, bcm
 import csv
 from bisect import bisect
 import multiprocessing
@@ -28,13 +28,13 @@ def main():
     parser.add_option("-c", "--changeposition", dest="changepos",
           help="Change the postion of reward", default=False, action='store_true')
     parser.add_option("-t", "--trials", dest="trials",
-      help="Number of trials", metavar="int",default=40)
+      help="Number of trials", metavar="int",default=30)
     parser.add_option("-s", "--serotonin", dest="serotonin",
       help="Activate serotonergic system", default=True, action='store_true')
     parser.add_option("-p", "--plot", dest="plot",
-      help="Plotting", default=False, action='store_true')
+      help="Plotting", default=True, action='store_true')
     parser.add_option("-q", "--ca3", dest="ca3_scale",
-      help="To what extent does CA1 receive CA3 input?", default=0.0)
+      help="To what extent does CA1 receive CA3 input?", default=0.1)
     parser.add_option("-d", "--dlr", dest="eta_DA",
                   help="Learning rate for dopamine", metavar="float", default=0.01)
     parser.add_option("-l", "--slr", dest="eta_Sero",
@@ -221,6 +221,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
 
     w_tot = np.concatenate((np.ones([N_pc,N_action]).T*w_in,w_lateral),axis=1)#total weigths
     w_ca1 = np.ones([N_pc,N_pc]).T*w_in_ca1#total weigths
+    new_weight_buffer = w_ca1
 
     X = np.zeros([N_pc,1]) #matrix of spikes place cells
     X_cut = np.zeros([N_pc+N_action, N_action])  #matrix of spikes place cells
@@ -293,6 +294,8 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     ca1_activities = []
     ac_activities = []
     old_tr = tr
+    w_ca1_initial = w_ca1
+    
     while i<T_max*Trials:
         i+=int(1)
         t=np.mod(i,T_max)
@@ -305,7 +308,6 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             pos = starting_position #initialize position at origin (centre open field)
             rew_found=0 #flag that signals when the reward is found
             tr+=int(1) #trial number
-            print('Episode:',episode,'Trial:',tr)
             t_rew=T_max #time of reward - initialized at T_max at the beginning of the trial
             #initialisation variables - reset between trials
             Y_action_neurons= np.zeros([N_action, 1])
@@ -325,6 +327,8 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             trace_post_pre= np.zeros([N_action,N_pc])
             trace_tot = np.zeros([N_action,N_pc])
             eligibility_trace = np.zeros([N_action, N_pc])
+            w_ca1 = new_weight_buffer
+            print('Episode:',episode,'Trial:',tr,'Mean Weight:',w_ca1.mean())
 
 
 
@@ -342,6 +346,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         rhos = np.multiply(rho_pc,np.exp(-np.sum((np.matlib.repmat(pos,n_x*n_y,1)-pc)**2,axis=1)/(sigma_pc**2))) #rate inhomogeneous poisson process
         prob = rhos
         ca3_activities.append(rhos)
+
         #turn place cells off after reward is reached
         if t>t_rew:
             prob=np.zeros_like(rhos)
@@ -358,6 +363,13 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
 
         ca1_spikes.append(X_ca1)
 
+        #dw_ca1 = bcm(w_ca1, 0.009133, rhos, u_ca1, epsilon=0.001)
+        dw_ca1 = bcm(w_ca1, 0.01 * 2, rhos, u_ca1, epsilon=0.0001)
+
+        new_weight_buffer = new_weight_buffer + dw_ca1 / 100
+        
+        
+        #sys.exit()
         # store_pos[i-1,:] = pos #store position (for plotting)
 
         #save quadrant
@@ -531,6 +543,6 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         pos_hist=np.histogram2d(x_pos, y_pos, bins=(np.linspace(-2,2,50),np.linspace(-2,2,50)))[0]
     except:
         print(pos_hist.shape)
-    return episode,first_reward,rewarding_trials,punishing_trials,quadrant_map,median_distance,time_reward,time_reward2,time_reward_old,pos_hist, activities
+    return episode,first_reward,rewarding_trials,punishing_trials,quadrant_map,median_distance,time_reward,time_reward2,time_reward_old,pos_hist, activities, w_ca1_initial, w_ca1
 if __name__ == '__main__':
     results = main()
