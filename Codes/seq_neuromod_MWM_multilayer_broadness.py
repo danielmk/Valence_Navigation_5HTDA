@@ -51,6 +51,8 @@ def main():
                   help="Time constant for the STDP window of serotonin", metavar="float", default=10)
     parser.add_option("-j", "--jtime", dest="TDA",
                   help="Time constant for the STDP window of dopamine", metavar="float", default=10)
+    parser.add_option("--offset", dest="offset",
+                  help="Wheter using the offset in CA1 place cells", default=True)
     
     
     options, args = parser.parse_args()
@@ -73,18 +75,25 @@ def main():
     tau_DA=options.TDA #time constant pre-post window
     tau_Sero=options.TSero   #time constant post-pre window for serotonin
     ca3_scale = options.ca3_scale 
+    offset_flag = options.offset
+    
 
     if plot_flag:
         plt.close()
+
     # if episodes==1:
 
     #     episode_run(jobID,1,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
     # else:
+
     results=[]
+
     for episode in range(0,episodes):
+
         print('Episode',episode)
         # results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,),error_callback=log_e))
-        results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale))
+        results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,
+                                   A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale, offset_flag))
         # ca1_spikes = episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
         # return ca1_spikes
 
@@ -98,7 +107,9 @@ def main():
 def log_e(e):
   print(e)
 
-def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale):
+def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,
+                Activ,Inhib,tau_DA,tau_Sero,ca3_scale, offset_flag):
+
     # random number of each pool
     np.random.seed()
 
@@ -131,19 +142,20 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     space_pc = 0.4 #place cells separation distance
     bounds_x = np.array([-2,2]) #bounds open field, x axis
     bounds_y = np.array([-2,2]) #bounds open field, y axis
-    samples_x = int(np.round((bounds_x[1]-bounds_x[0])/space_pc)+1) #samples of x axis
-    samples_y = int(np.round((bounds_y[1]-bounds_y[0])/space_pc)+1) #samples of y axis
-    x_pc = np.linspace(bounds_x[0],bounds_x[1],samples_x) #place cells on axis x
+
+    if offset_flag:
+        x_pc = np.round(np.arange(bounds_x[0], bounds_x[1], space_pc)+space_pc/2,2)
+        y_pc = np.round(np.arange(bounds_y[0], bounds_y[1], space_pc)+space_pc/2,2)
+    else:
+        x_pc = np.round(np.arange(bounds_x[0], bounds_x[1]+space_pc, space_pc),2)
+        y_pc = np.round(np.arange(bounds_y[0], bounds_y[1]+space_pc, space_pc),2)
+
     n_x = np.size(x_pc) #nr of place cells on axis x
-    y_pc= np.linspace(bounds_y[0],bounds_y[1],samples_y) #place cells on axis y
     n_y = np.size(y_pc) #nr of place cells on axis y
     pos = np.zeros([1,2]) #position of the agent at each timestep
 
-    #create grid
-    y = np.matlib.repmat(y_pc, n_x,1).reshape((n_x*n_y,1),order='F')
-
-    x = np.matlib.repmat(x_pc,1,n_y)
-    pc = np.concatenate((x.T,y),axis=1)
+    xx, yy = np.meshgrid(x_pc,y_pc)
+    pc = np.stack([xx,yy], axis=2).reshape(-1,2)
 
     """Place cell parameters"""
     N_pc=pc.shape[0] #number of place cells
@@ -216,9 +228,6 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     eligibility_trace_sero = np.zeros([N_action, N_pc]) #total convolution
 
     ## initialise variables
-    i=int(0) #counter ms
-    tr=0 #counter trial
-
     w_tot = np.concatenate((np.ones([N_pc,N_action]).T*w_in,w_lateral),axis=1)#total weigths
     w_ca1 = np.ones([N_pc,N_pc]).T*w_in_ca1#total weigths
     new_weight_buffer = w_ca1
@@ -249,30 +258,47 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
 
     ## initialize plot open field
     if plot_flag:
+
         plt.close()
-        fig, ((ax1, ax2), (ax3, ax4))= plt.subplots(figsize=(8, 8), ncols=2, nrows=2)
+        fig, ((ax1, ax2), (ax3, ax4))= plt.subplots(ncols=2, nrows=2, figsize=(8, 8))
         fig.subplots_adjust(hspace = 0.5)
-        fig.show()
+
         plt.ion()
         #Plot of reward places and intial position
         reward_plot = ax1.plot(c[0]+r_goal*np.cos(np.linspace(-np.pi,np.pi,100)), c[1]+r_goal*np.sin(np.linspace(-np.pi,np.pi,100)),'b') #plot reward 1
         point_plot,= ax1.plot(starting_position[0],starting_position[1], 'r',marker='o',markersize=5) #plot initial starting point
 
         #plot walls
-        ax1.plot([bounds_x[0],bounds_x[1]], [bounds_y[1],bounds_y[1]], 'k')
-        ax1.plot([bounds_x[0],bounds_x[1]], [bounds_y[0],bounds_y[0]], 'k')
-        ax1.plot([bounds_x[0],bounds_x[0]], [bounds_y[0],bounds_y[1]], 'k')
-        ax1.plot([bounds_x[1],bounds_x[1]], [bounds_y[0],bounds_y[1]], 'k')
+        ax1.plot([bounds_x[0],bounds_x[1]], [bounds_y[1],bounds_y[1]],c='k', ls='--',lw=0.5)
+        ax1.plot([bounds_x[0],bounds_x[1]], [bounds_y[0],bounds_y[0]],c='k', ls='--',lw=0.5)
+        ax1.plot([bounds_x[0],bounds_x[0]], [bounds_y[0],bounds_y[1]],c='k', ls='--',lw=0.5)
+        ax1.plot([bounds_x[1],bounds_x[1]], [bounds_y[0],bounds_y[1]],c='k', ls='--',lw=0.5)
+
+        ax1.scatter(pc[:,0],pc[:,1], s=1)
+
+        ax1.set_title('Trial 0')
+        ax2.set_title('Action neurons firing rates')
+        ax3.set_title('Mean weights')
+        ax4.set_title('Agent''s policy')
+
+        ax4.set_xlim([pc.min(),pc.max()])
+        ax4.set_ylim([pc.min(),pc.max()])
+
+        plt.pause(0.00001)
+
+        fig.show()
+
 
 
     ## delete actions that lead out of the maze
 
     #find index place cells that lie on the walls
     sides = np.empty((4,np.max([n_x,n_y])))
-    sides[0,:] = np.where(pc[:,1] == -2)[0].T #bottom wall, y=-2
-    sides[1,:] = np.where(pc[:,1] == 2)[0].T #top wall, y=+2
-    sides[2,:] = np.where(pc[:,0] == 2)[0].T #left wall, x=-2
-    sides[3,:] = np.where(pc[:,0] == -2)[0].T #right wall, x=+2
+
+    sides[0,:] = np.where(pc[:,1] == pc.min())[0].T #bottom wall, y=-2
+    sides[1,:] = np.where(pc[:,1] == pc.max())[0].T #top wall, y=+2
+    sides[2,:] = np.where(pc[:,0] == pc.max())[0].T #left wall, x=-2
+    sides[3,:] = np.where(pc[:,0] == pc.min())[0].T #right wall, x=+2
 
     #store index of actions forbidden from each side
     forbidden_actions = np.empty((4,19))
@@ -293,22 +319,31 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     ca3_activities = []
     ca1_activities = []
     ac_activities = []
-    old_tr = tr
+    old_tr = 0
     w_ca1_initial = w_ca1
     
+    i = 0 # counter ms
+    tr=0  # counter trial
+
     while i<T_max*Trials:
-        i+=int(1)
-        t=np.mod(i,T_max)
+
+        i+=1 # int(1) was slower, casting useless
+        t = i%T_max # much faster than np.mod(i,T_max)
+
         ## reset new trial
         # if t == 3000:
         # return ca1_spikes
+
+        # Reset if it is the last run
         if t==1:
+
             quadrant = np.zeros([2,2])
             median_tr = []
             pos = starting_position #initialize position at origin (centre open field)
             rew_found=0 #flag that signals when the reward is found
-            tr+=int(1) #trial number
+            tr += 1 #trial number
             t_rew=T_max #time of reward - initialized at T_max at the beginning of the trial
+
             #initialisation variables - reset between trials
             Y_action_neurons= np.zeros([N_action, 1])
             X_cut = np.zeros([N_pc+N_action, N_action])
@@ -330,8 +365,6 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             w_ca1 = new_weight_buffer
             print('Episode:',episode,'Trial:',tr,'Mean Weight:',w_ca1.mean())
 
-
-
             #change reward location in the second half of the experiment
             if (tr==(Trials/2)+1) and changepos:
                 rew1_flag=0
@@ -339,7 +372,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
                 np.linspace(-np.pi, np.pi, 100)
                 if plot_flag:
                     reward_plot.pop(0).remove()
-                    punish_plot.pop(0).remove()
+                    #punish_plot.pop(0).remove() NOT DEFINED!
                     reward_plot = ax1.plot(c2[0]+r_goal*np.cos(np.linspace(-np.pi,np.pi,100)), c2[1]+r_goal*np.sin(np.linspace(-np.pi,np.pi,100)),'b') #plot negative reward 2
         
         ## place cells (CA3 layer)
@@ -465,6 +498,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         if t> t_extreme and t<T_max:
             i = int((np.ceil(i/T_max))*T_max)-1 #set i counter to the end of the trial
             t_end = t_extreme #for plotting
+
         if t==0:
             t=T_max
             ## update weights - end of trial
@@ -496,15 +530,15 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
             ## plot
 
             if plot_flag:
+                
+                ax1.set_title('Trial '+str(tr))
                 #display trajectory of the agent in each trial
                 f3 =ax1.plot(store_pos[int((np.floor((i-1)/T_max))*T_max+1):int((np.floor((i-1)/T_max))*T_max+t_end+1),0], store_pos[int((np.floor((i-1)/T_max))*T_max+1):int((np.floor((i-1)/T_max))*T_max+t_end+1),1]) #trajectory
                 point_plot, = ax1.plot(starting_position[0],starting_position[1],'r',marker='o',markersize=5) #starting point
-                ax1.set_title('Trial '+str(tr))
 
                 #display action neurons firing rates (activity bump)
                 pos = ax2.imshow(firing_rate_store[:,int((np.floor((i-1)/T_max))*T_max):int((np.floor((i-1)/T_max))*T_max+t_end)],cmap='Blues', interpolation='none',aspect='auto')
                 #colorbar
-                ax2.set_title('Action neurons firing rates')
                 if tr==1:
                     fig.colorbar(pos, ax=ax2)
                 #display weights over the open field, averaged over action neurons
@@ -514,14 +548,11 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
                 #set(gca,'YDir','normal')
                 if tr==1:
                     fig.colorbar(pos2, ax=ax3)
-                ax3.set_title('Mean weights')
+
                 #plot policy as a vector field
                 #filter zero values
                 ac_norm=np.max(np.linalg.norm(ac,axis=0))
                 f4=ax4.quiver(pc[:,0], pc[:,1], ac[0,:].T/ac_norm, ac[1,:].T/ac_norm)
-                ax4.set_xlim([-2,2])
-                ax4.set_ylim([-2,2])
-                ax4.set_title('Agent''s policy')
                 #time.sleep(1.0)
                 fig.canvas.draw()
                 plt.pause(0.00001)
@@ -545,5 +576,7 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
     except:
         print(pos_hist.shape)
     return episode,first_reward,rewarding_trials,punishing_trials,quadrant_map,median_distance,time_reward,time_reward2,time_reward_old,pos_hist, activities, w_ca1_initial, w_ca1
+
 if __name__ == '__main__':
+
     results = main()
