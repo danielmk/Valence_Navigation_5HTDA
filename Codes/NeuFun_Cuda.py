@@ -1,5 +1,7 @@
 import numpy as np
 from numba import jit_module, jit
+import pdb
+
 """
 Different convolutions required for SRM0 model and the calculation of
 the synaptic weight
@@ -89,8 +91,23 @@ def weights_update_rate(A, tau_STDP, r_X, r_Y, W, trace, tau_e):
     return W, tot_conv, trace, W
 
 def bcm(w, theta, xi, y, epsilon=1):
-    xi=np.repeat(xi[:,None], y.shape[0], axis=1)
-    y=np.repeat(y, xi.shape[0], axis=1).T
+    """
+    Compute weights update for weights from CA3 to CA1 layer.
+
+    Parameters:
+        - w : np.ndarray
+            The weights from ca3 to ca1 layer, shape (N_pc_ca1, N_pc_ca3).
+        - theta : float
+            The BCM threshold.
+        - xi : np.ndarray
+            The activity of ca3 layer, shape (N_pc_ca3,)
+        - y : np.ndarray
+            The activity of ca1 layer, shape (N_pc_ca1, 1)
+    
+    Return:
+        - weights update, array of shape (N_pc_ca1, N_pc_ca3)
+    """
+
     return y * (y - theta) * xi - epsilon * w
 
 
