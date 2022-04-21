@@ -24,15 +24,15 @@ def main():
     parser.add_option("-o", "--output", dest="jobID",
                   help="ID of the JOB", metavar="FILE", default="multilayer_test_off")
     parser.add_option("-e", "--episodes", dest="episodes",
-          help="Runs to be performed", metavar="int", default=20)
+          help="Runs to be performed", metavar="int", default=200)
     parser.add_option("-c", "--changeposition", dest="changepos",
           help="Change the postion of reward", default=False, action='store_true')
     parser.add_option("-t", "--trials", dest="trials",
-      help="Number of trials", metavar="int",default=30)
+      help="Number of trials", metavar="int",default=40)
     parser.add_option("-s", "--serotonin", dest="serotonin",
       help="Activate serotonergic system", default=True, action='store_true')
     parser.add_option("-p", "--plot", dest="plot",
-      help="Plotting", default=True, action='store_true')
+      help="Plotting", default=False, action='store_true')
     parser.add_option("-q", "--ca3", dest="ca3_scale",
       help="To what extent does CA1 receive CA3 input?", default=0.1)
     parser.add_option("-d", "--dlr", dest="eta_DA",
@@ -76,23 +76,24 @@ def main():
 
     if plot_flag:
         plt.close()
-    # if episodes==1:
+    if episodes==1:
 
-    #     episode_run(jobID,1,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
-    # else:
-    results=[]
-    for episode in range(0,episodes):
-        print('Episode',episode)
-        # results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,),error_callback=log_e))
-        results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale))
-        # ca1_spikes = episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
-        # return ca1_spikes
+        episode_run(jobID,1,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale)
+    else:
+        pool = multiprocessing.Pool(12)
+        results=[]
+        for episode in range(0,episodes):
+            print('Episode',episode)
+            results.append(pool.apply_async(episode_run,(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale),error_callback=log_e))
+            # results.append(episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,ca3_scale))
+            # ca1_spikes = episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_DA,A_Sero,Activ,Inhib,tau_DA,tau_Sero,)
+            # return ca1_spikes
 
     descriptor = {'jobID':jobID,'Trials':Trials,'episodes':episodes,'eta_DA':eta_DA,'eta_Sero':eta_Sero,'A_DA':A_DA,'A_Sero':A_Sero,'Activ':Activ,'Inhib':Inhib,'T_DA':tau_DA,'T_Sero':tau_Sero}
-    # results_episode = [result.get() for result in results]
+    results_episode = [result.get() for result in results]
 
     with open(jobID+'.pickle', 'wb') as myfile:
-        pickle.dump((descriptor,results), myfile)
+        pickle.dump((descriptor,results_episode), myfile)
     return results
 
 def log_e(e):
@@ -427,14 +428,14 @@ def episode_run(jobID,episode,plot_flag,Trials,changepos,Sero,eta_DA,eta_Sero,A_
         ## synaptic plasticity
 
         #Rate-based update
-        W1, eligibility_trace, trace_tot, W = weights_update_rate((A_pre_post+A_post_pre)/2, tau_pre_post, np.matlib.repmat(prob,N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1, trace_tot, tau_e)
+        W1, eligibility_trace, trace_tot, W = weights_update_rate((A_pre_post+A_post_pre)/2, tau_pre_post, np.matlib.repmat(u_ca1.squeeze(),N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1, trace_tot, tau_e)
 
         #STDP with unsymmetric window and depression due to serotonin
         if not(Inhib) and not(Activ):
-            W1_sero, eligibility_trace_sero, trace_tot_sero, W_sero = weights_update_rate((A_pre_post_sero+A_post_pre_sero)/2, tau_pre_post_sero, np.matlib.repmat(prob,N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1_sero, trace_tot_sero, tau_e_sero)
+            W1_sero, eligibility_trace_sero, trace_tot_sero, W_sero = weights_update_rate((A_pre_post_sero+A_post_pre_sero)/2, tau_pre_post_sero, np.matlib.repmat(u_ca1.squeeze(),N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1_sero, trace_tot_sero, tau_e_sero)
         elif Activ and any(lower <= i<= upper for (lower, upper) in ranges):
             #If there is overpotentiation of serotonin, assumed as doubled
-            W1_sero, eligibility_trace_sero, trace_tot_sero, W_sero = weights_update_rate((A_pre_post_sero+A_post_pre_sero)/2, tau_pre_post_sero, np.matlib.repmat(prob,N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1_sero, trace_tot_sero, tau_e_sero)
+            W1_sero, eligibility_trace_sero, trace_tot_sero, W_sero = weights_update_rate((A_pre_post_sero+A_post_pre_sero)/2, tau_pre_post_sero, np.matlib.repmat(u_ca1.squeeze(),N_action,1), np.matlib.repmat(np.squeeze(rho_action_neurons),N_pc,1).T, W1_sero, trace_tot_sero, tau_e_sero)
         elif Inhib and any(lower <= i<= upper for (lower, upper) in ranges):
             #If there is inhibition of serotonin, no eligibility trace is produced
             pass
