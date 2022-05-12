@@ -23,9 +23,12 @@ def convolution(conv_decay,conv_rise,tau_m,tau_s,eps0,X,w=None):
     """
     if w is None:
         w = np.ones(X.shape).T
+
     conv_decay = conv_decay + (-conv_decay)/tau_m + np.multiply(X,w.T)
     conv_rise = conv_rise + (-conv_rise)/tau_s + np.multiply(X,w.T)
+    
     conv = eps0*(conv_decay-conv_rise)/(tau_m-tau_s)
+
     return conv,conv_decay,conv_rise
 
 
@@ -73,9 +76,10 @@ def neuron_ca1(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i, pos, 
     """CA1 neurons receive EPSPs from CA3 neurons but have their membrane potential also 
     modulated by place"""
     N_pre, N_post = epsp.shape #no. place cells, no. action neurons
-    u_epsp = np.sum(epsp,axis=0,keepdims=True).T+chi*np.exp((-i+last_spike_post)/tau_m) #membrane potential
-    # print(u.mean())
-    u = (1-epsp_scaling)*rho0 * np.exp(-(np.sum((np.matlib.repmat(pos,n_x*n_y,1)-pc)**2,axis=1)/(sigma_pc**2)) + epsp_scaling * (u_epsp.T)).T #rate inhomogeneous poisson process
+    u_epsp = np.sum(epsp,axis=0,keepdims=True).T + chi*np.exp((-i+last_spike_post)/tau_m) #membrane potential
+
+    u = ((1-epsp_scaling)*rho0*np.exp(-(np.sum((pos-pc)**2,axis=1)/(sigma_pc**2))) + epsp_scaling * (u_epsp.T)).T #rate inhomogeneous poisson process
+
     Y= np.random.rand(N_post,1) <=u #realization spike train
     # pdb.set_trace()
     last_spike_post[Y]=i #update time postsyn spike
@@ -83,9 +87,12 @@ def neuron_ca1(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i, pos, 
     # pdb.set_trace()
     return Y, last_spike_post, Canc, u
 
+
 def weights_update_rate(A, tau_STDP, r_X, r_Y, W, trace, tau_e):
+    
     #Rate-based rule based on near neighboors STDP to BCM
     W = A*r_Y*(1/(tau_STDP**(-1)+r_Y))*r_X
+
     #Elegibility trace
     tot_conv, trace = convolution_type2(trace, tau_e,  1, W) #All weight changes filtered through trace
     return W, tot_conv, trace, W
