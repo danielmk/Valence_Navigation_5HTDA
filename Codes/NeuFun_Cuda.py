@@ -114,7 +114,9 @@ def bcm(w, theta, xi, y, epsilon=1):
     Return:
         - weights update, array of shape (N_pc_ca1, N_pc_ca3)
     """
-
+    
+    y = y.reshape(-1,1)
+    xi = xi.reshape(1,-1)
     return y * (y - theta) * xi - epsilon * w
 
 
