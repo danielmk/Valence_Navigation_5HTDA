@@ -50,12 +50,13 @@ def convolution_type2(conv1, tau_m, eps0, X):
 def weights_update_stdp(A_plus, A_minus, tau_plus, tau_minus, X, Y, conv1_pre, conv1_post, trace, tau_e):
     conv_pre_old, _ = convolution_type2(conv1_pre, tau_plus,  A_plus, np.zeros_like(conv1_pre)) #Pre trace without spike - for coincident spikes
     conv_post_old, _ = convolution_type2(conv1_post, tau_minus,A_minus, np.zeros_like(conv1_pre)) #Post trace without spike - for coincident spikes
-
+    print(conv1_pre.shape)
     #STDP
     conv_pre, conv1_pre = convolution_type2(conv1_pre, tau_plus,  A_plus, X) #Trace by pre-synaptic neuron, amplitude A+ and time
     conv_post, conv1_post = convolution_type2(conv1_post, tau_minus,  A_minus, Y) #Trace by pre-synaptic neuron, amplitude A+ and time
     W = np.multiply((np.multiply(conv_pre,Y)+np.multiply(conv_post,X)),(X+Y!=2))+ (np.multiply(conv_pre_old,Y)+np.multiply(conv_post_old,X))+np.multiply((A_plus+A_minus)/2,(X+Y==2))
     #Elegibility trace
+    
     tot_conv, trace = convolution_type2(trace, tau_e,  1, W) #All weight changes filtered through trace
     return conv1_pre, conv1_post,tot_conv, trace, W
 
@@ -88,14 +89,14 @@ def neuron_ca1(epsp, chi, last_spike_post, tau_m, rho0, theta, delta_u, i, pos, 
     return Y, last_spike_post, Canc, u
 
 
-def weights_update_rate(A, tau_STDP, r_X, r_Y, W, trace, tau_e):
+def weights_update_rate(A, tau_STDP, r_X, r_Y, trace, tau_e):
     
     #Rate-based rule based on near neighboors STDP to BCM
     W = A*r_Y*(1/(tau_STDP**(-1)+r_Y))*r_X
 
     #Elegibility trace
     tot_conv, trace = convolution_type2(trace, tau_e,  1, W) #All weight changes filtered through trace
-    return W, tot_conv, trace, W
+    return W, tot_conv, trace
 
 def bcm(w, theta, xi, y, epsilon=1):
     """
